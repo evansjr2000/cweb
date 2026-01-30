@@ -1,0 +1,16 @@
+The CWEB program  treeprint.w is a very old C literate program to print out a directory structure to an
+ASCII terminal. The Current version  uses man non-ANSI C system and C library calls.  I would like Claude
+to generate a treeprint.ch (CWEB change file) to update the system and C library calls in
+treeprint.w to the ANSI standard.
+
+Use the script in $HOME/bin/cweb.sh to generate the C file treeprint.c, like this:
+
+    $ cweb.sh ctangle treeprint.w treeprint.ch
+
+Then compile the program like the following:
+
+     $ gcc -std-c89 -o treeprint treeprint.c
+
+
+
+
