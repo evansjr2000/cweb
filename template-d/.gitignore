@@ -1,0 +1,10 @@
+hello
+template
+*.c
+*.idx
+*.log
+*.pdf
+*.scn
+*.tex
+*.toc
+*.*~
