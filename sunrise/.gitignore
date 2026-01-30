@@ -1,0 +1,10 @@
+CWEB_Sunrise_Sunset_Executive_Summary.pages
+cweb.sh
+pages_extracted
+sunrise
+*.c
+*.idx
+*.pdf
+*.scn
+*.tex
+*.*~
