@@ -7,4 +7,6 @@ sunrise
 *.pdf
 *.scn
 *.tex
+*.toc
+*.log
 *.*~

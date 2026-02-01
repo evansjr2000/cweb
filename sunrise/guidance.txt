@@ -1,0 +1,13 @@
+1.  Calculate the sunrise and sunset for a particular date given a latitude and longitude. The code should be in literate programming format in the C language.  The time should be Pacific Standard time.
+
+2. Test the code using the latitude and longitude of San Diego, California. for the date January 31, 2026.
+
+3.  Use the previously generated code sunrise.w as the base for further development.
+
+4. Generate a bash script to run the program with Latitude and Longitude of San Diego, CA, and date
+of 2026-01-31.
+
+5.  Calculate the minutes for sunshine and sunset to four decimal places (floating point).
+
+
+
