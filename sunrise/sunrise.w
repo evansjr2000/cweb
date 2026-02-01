@@ -43,7 +43,7 @@ the sun's semi-diameter (16 arcminutes).
 @<Type definitions@>=
 typedef struct {
     int hour;
-    int minute;
+    double minute;
     int valid;
 } SunTime;
 
@@ -117,13 +117,13 @@ printf("Date: %04d-%02d-%02d\n", year, month, day);
 printf("Times shown in Pacific Standard Time (PST)\n\n");
 
 if (times.sunrise.valid) {
-    printf("Sunrise: %02d:%02d PST\n", times.sunrise.hour, times.sunrise.minute);
+    printf("Sunrise: %02d:%07.4f PST\n", times.sunrise.hour, times.sunrise.minute);
 } else {
     printf("Sunrise: No sunrise (polar night or midnight sun)\n");
 }
 
 if (times.sunset.valid) {
-    printf("Sunset:  %02d:%02d PST\n", times.sunset.hour, times.sunset.minute);
+    printf("Sunset:  %02d:%07.4f PST\n", times.sunset.hour, times.sunset.minute);
 } else {
     printf("Sunset:  No sunset (polar night or midnight sun)\n");
 }
@@ -329,7 +329,7 @@ void utc_to_local_time(double utc_time, SunTime *result) {
 
     result->valid = 1;
     result->hour = (int)local_time;
-    result->minute = (int)((local_time - result->hour) * 60.0);
+    result->minute = (local_time - result->hour) * 60.0;
 }
 
 @* Index.
