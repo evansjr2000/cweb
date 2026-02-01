@@ -36,6 +36,7 @@ the sun's semi-diameter (16 arcminutes).
 #define ZENITH 90.833
 #define DEG_TO_RAD(deg) ((deg) * PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / PI)
+#define PST_OFFSET (-8.0)  /* Pacific Standard Time: UTC-8 */
 
 @ We define a structure to hold the calculated sunrise and sunset times.
 
@@ -106,21 +107,23 @@ if (day < 1 || day > 31) {
 }
 
 @ Display the calculated sunrise and sunset times in human-readable format.
+All times are displayed in Pacific Standard Time (PST).
 
 @<Display results@>=
 printf("Location: %.4f° %s, %.4f° %s\n",
        fabs(latitude), latitude >= 0 ? "N" : "S",
        fabs(longitude), longitude >= 0 ? "E" : "W");
-printf("Date: %04d-%02d-%02d\n\n", year, month, day);
+printf("Date: %04d-%02d-%02d\n", year, month, day);
+printf("Times shown in Pacific Standard Time (PST)\n\n");
 
 if (times.sunrise.valid) {
-    printf("Sunrise: %02d:%02d\n", times.sunrise.hour, times.sunrise.minute);
+    printf("Sunrise: %02d:%02d PST\n", times.sunrise.hour, times.sunrise.minute);
 } else {
     printf("Sunrise: No sunrise (polar night or midnight sun)\n");
 }
 
 if (times.sunset.valid) {
-    printf("Sunset:  %02d:%02d\n", times.sunset.hour, times.sunset.minute);
+    printf("Sunset:  %02d:%02d PST\n", times.sunset.hour, times.sunset.minute);
 } else {
     printf("Sunset:  No sunset (polar night or midnight sun)\n");
 }
@@ -185,8 +188,8 @@ SunTimes calculate_sun_times(double lat, double lng, int year, int month, int da
 }
 
 @ The heart of the algorithm: calculating the exact UTC time of sunrise or sunset.
-This involves computing the sun's mean anomaly, equation of center, ecliptic
-longitude, right ascension, declination, and hour angle.
+This implements the NOAA Solar Calculator spreadsheet algorithm, which provides
+accurate results by properly computing the equation of time and solar noon.
 
 The |is_sunrise| parameter determines whether we calculate sunrise (1) or sunset (0).
 
@@ -196,11 +199,13 @@ double calculate_time_utc(double jd, double lat, double lng, int is_sunrise) {
 
     @<Calculate solar mean longitude@>@;
     @<Calculate solar mean anomaly@>@;
+    @<Calculate eccentricity@>@;
     @<Calculate equation of center@>@;
     @<Calculate true longitude and right ascension@>@;
     @<Calculate solar declination@>@;
+    @<Calculate equation of time@>@;
     @<Calculate hour angle@>@;
-    @<Calculate UTC time@>@;
+    @<Calculate sunrise sunset time@>@;
 
     return utc_time;
 }
@@ -212,11 +217,19 @@ double mean_long = fmod(280.46646 + 36000.76983 * t + 0.0003032 * t * t, 360.0);
 while (mean_long < 0) mean_long += 360.0;
 
 @ The mean anomaly represents the angle between the sun's position and its
-position at perihelion (closest approach to Earth).
+position at perihelion (closest approach to Earth). We normalize to $0$--$360$
+degrees.
 
 @<Calculate solar mean anomaly@>=
-double mean_anom = 357.52911 + 35999.05029 * t - 0.0001537 * t * t;
-mean_anom = DEG_TO_RAD(mean_anom);
+double mean_anom_deg = fmod(357.52911 + 35999.05029 * t - 0.0001537 * t * t, 360.0);
+while (mean_anom_deg < 0) mean_anom_deg += 360.0;
+double mean_anom = DEG_TO_RAD(mean_anom_deg);
+
+@ Earth's orbital eccentricity changes slowly over time. This value is needed
+for the equation of time calculation.
+
+@<Calculate eccentricity@>=
+double eccent = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
 
 @ The equation of center corrects for Earth's elliptical orbit.
 
@@ -242,8 +255,27 @@ while (right_asc >= 360.0) right_asc -= 360.0;
 @<Calculate solar declination@>=
 double declination = RAD_TO_DEG(asin(sin(DEG_TO_RAD(obliq)) * sin(DEG_TO_RAD(apparent_long))));
 
+@ The equation of time accounts for Earth's elliptical orbit and axial tilt,
+representing the difference between apparent solar time and mean solar time.
+This is essential for accurate sunrise/sunset calculations. The formula
+follows the NOAA Solar Calculator spreadsheet algorithm and includes the
+orbital eccentricity factor.
+
+@<Calculate equation of time@>=
+double var_y = tan(DEG_TO_RAD(obliq / 2.0));
+var_y = var_y * var_y;
+double eq_time = 4.0 * RAD_TO_DEG(
+    var_y * sin(2.0 * DEG_TO_RAD(mean_long))
+    - 2.0 * eccent * sin(mean_anom)
+    + 4.0 * eccent * var_y * sin(mean_anom) * cos(2.0 * DEG_TO_RAD(mean_long))
+    - 0.5 * var_y * var_y * sin(4.0 * DEG_TO_RAD(mean_long))
+    - 1.25 * eccent * eccent * sin(2.0 * mean_anom)
+);  /* Result in minutes */
+
 @ The hour angle is the angular distance of the sun from the local meridian.
 If the calculation fails (returns NaN), it indicates polar day or night.
+The hour angle is always returned as a positive value representing the
+angular distance from solar noon.
 
 @<Calculate hour angle@>=
 double cos_hour_angle = (cos(DEG_TO_RAD(ZENITH)) -
@@ -254,21 +286,30 @@ if (cos_hour_angle > 1.0 || cos_hour_angle < -1.0) {
     return -1.0;  /* No sunrise or sunset */
 }
 
-double hour_angle = RAD_TO_DEG(acos(cos_hour_angle));
-if (!is_sunrise) hour_angle = 360.0 - hour_angle;
+double hour_angle = RAD_TO_DEG(acos(cos_hour_angle));  /* In degrees */
 
-@ Convert the hour angle to UTC time, accounting for the equation of time
-(the difference between solar time and clock time).
+@ Calculate the UTC time using the NOAA formula. Solar noon is calculated
+from the equation of time and longitude. Sunrise occurs before solar noon
+(subtract hour angle) and sunset occurs after (add hour angle).
 
-@<Calculate UTC time@>=
-double ha_time = hour_angle / 15.0;  /* Convert degrees to hours */
-double mean_time = ha_time + right_asc / 15.0 - (0.06571 * t) - 6.622;
-double utc_time = fmod(mean_time - lng / 15.0, 24.0);
+@<Calculate sunrise sunset time@>=
+/* Solar noon in minutes from midnight UTC */
+double solar_noon = (720.0 - 4.0 * lng - eq_time) / 60.0;  /* Convert to hours */
+
+double utc_time;
+if (is_sunrise) {
+    utc_time = solar_noon - hour_angle / 15.0;  /* Subtract HA for sunrise */
+} else {
+    utc_time = solar_noon + hour_angle / 15.0;  /* Add HA for sunset */
+}
+
+/* Normalize to 0-24 range */
 while (utc_time < 0) utc_time += 24.0;
 while (utc_time >= 24.0) utc_time -= 24.0;
 
-@ Convert UTC time (in decimal hours) to local time structure.
-This simplified version assumes UTC; timezone support could be added later.
+@ Convert UTC time (in decimal hours) to local Pacific Standard Time.
+PST is UTC$-8$ hours. The function handles day boundary crossings when
+the local time falls before midnight or after.
 
 @<Function implementations@>=
 void utc_to_local_time(double utc_time, SunTime *result) {
@@ -279,9 +320,16 @@ void utc_to_local_time(double utc_time, SunTime *result) {
         return;
     }
 
+    /* Apply PST offset (UTC-8) */
+    double local_time = utc_time + PST_OFFSET;
+
+    /* Handle day boundary crossing */
+    while (local_time < 0) local_time += 24.0;
+    while (local_time >= 24.0) local_time -= 24.0;
+
     result->valid = 1;
-    result->hour = (int)utc_time;
-    result->minute = (int)((utc_time - result->hour) * 60.0);
+    result->hour = (int)local_time;
+    result->minute = (int)((local_time - result->hour) * 60.0);
 }
 
 @* Index.
