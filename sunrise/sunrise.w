@@ -107,7 +107,8 @@ if (day < 1 || day > 31) {
 }
 
 @ Display the calculated sunrise and sunset times in human-readable format.
-All times are displayed in Pacific Standard Time (PST).
+All times are displayed in Pacific Standard Time (PST). The display also
+includes the total sunshine duration for the day in hours.
 
 @<Display results@>=
 printf("Location: %.4f° %s, %.4f° %s\n",
@@ -128,6 +129,15 @@ if (times.sunset.valid) {
     printf("Sunset:  No sunset (polar night or midnight sun)\n");
 }
 
+double sunshine = calculate_total_sunshine(times.sunrise, times.sunset);
+if (sunshine >= 0) {
+    int sunshine_hours = (int)sunshine;
+    double sunshine_minutes = (sunshine - sunshine_hours) * 60.0;
+    printf("\nTotal sunshine: %d hours and %.4f minutes\n", sunshine_hours, sunshine_minutes);
+} else {
+    printf("\nTotal sunshine: Cannot calculate (invalid sunrise or sunset)\n");
+}
+
 @* Astronomical Calculations.
 The core algorithm follows the NOAA method, which calculates the Julian day,
 solar position, and time correction factors.
@@ -138,6 +148,7 @@ int day_of_year(int year, int month, int day);
 double calculate_julian_day(int year, int month, int day);
 double calculate_time_utc(double julian_day, double lat, double lng, int is_sunrise);
 void utc_to_local_time(double utc_time, SunTime *result);
+double calculate_total_sunshine(SunTime sunrise, SunTime sunset);
 
 @ The Julian day is a continuous count of days since the beginning of
 the Julian Period. It's used as a standard reference for astronomical
@@ -330,6 +341,26 @@ void utc_to_local_time(double utc_time, SunTime *result) {
     result->valid = 1;
     result->hour = (int)local_time;
     result->minute = (local_time - result->hour) * 60.0;
+}
+
+@ Calculate the total sunshine duration for the day. This computes the
+difference between sunset and sunrise times, returning the result in hours
+to four decimal places. Returns $-1.0$ if either sunrise or sunset is invalid.
+
+@<Function implementations@>=
+double calculate_total_sunshine(SunTime sunrise, SunTime sunset) {
+    if (!sunrise.valid || !sunset.valid) {
+        return -1.0;
+    }
+
+    /* Convert both times to total minutes since midnight */
+    double sunrise_minutes = sunrise.hour * 60.0 + sunrise.minute;
+    double sunset_minutes = sunset.hour * 60.0 + sunset.minute;
+
+    /* Calculate difference in minutes and convert to hours */
+    double sunshine_hours = (sunset_minutes - sunrise_minutes) / 60.0;
+
+    return sunshine_hours;
 }
 
 @* Index.

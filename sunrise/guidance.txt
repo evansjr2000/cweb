@@ -12,6 +12,12 @@ of 2026-01-31.
 6. Create a Makefile to extract the documentation and C code and to generate PDF documentation from the
 TeX code, and compile the C code into an executable.
 
+7. Calculate the total sunshine for the day to four decimal places.
+
+8. Output the total sunshine in hours and minutes, with minutes to four decimal places.
+
+
+
 
 
 
