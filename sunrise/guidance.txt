@@ -21,4 +21,10 @@ for standard time or daylight savings time based on the input date.
 
 10.  If no timezone given on the command line, assume pacific time zone.
 
+11. How come when I enter the command "/usr/local/bin/sunrise 61.2181 -149.9003 2026 02 03 A", I do not
+get a valid response? (Dumb error.  Forgot to copy file to /usr/local/bin.)
+
+
+12. Add another option for UTC as the timezone.
+
 

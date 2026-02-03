@@ -46,6 +46,7 @@ the sun's semi-diameter (16 arcminutes).
 /* Timezone selection */
 #define TZ_PACIFIC 'P'
 #define TZ_ALASKA 'A'
+#define TZ_UTC 'U'
 
 /* Global timezone setting */
 char selected_timezone = TZ_PACIFIC;
@@ -81,7 +82,7 @@ int main(int argc, char *argv[]) {
         printf("Example: %s 32.7157 -117.1611 2026 1 31 P\n", argv[0]);
         printf("  Latitude: -90 to 90 (negative for South)\n");
         printf("  Longitude: -180 to 180 (negative for West)\n");
-        printf("  Timezone: P = Pacific (default), A = Alaska\n");
+        printf("  Timezone: P = Pacific (default), A = Alaska, U = UTC\n");
         return 1;
     }
 
@@ -112,8 +113,9 @@ if (argc == 7) {
     selected_timezone = argv[6][0];
     if (selected_timezone == 'p') selected_timezone = 'P';
     if (selected_timezone == 'a') selected_timezone = 'A';
-    if (selected_timezone != TZ_PACIFIC && selected_timezone != TZ_ALASKA) {
-        fprintf(stderr, "Error: Timezone must be P (Pacific) or A (Alaska)\n");
+    if (selected_timezone == 'u') selected_timezone = 'U';
+    if (selected_timezone != TZ_PACIFIC && selected_timezone != TZ_ALASKA && selected_timezone != TZ_UTC) {
+        fprintf(stderr, "Error: Timezone must be P (Pacific), A (Alaska), or U (UTC)\n");
         return 1;
     }
 } else {
@@ -147,19 +149,23 @@ The timezone abbreviation varies based on the timezone selection and DST status.
 @<Display results@>=
 {
     const char *tz_name;
+    const char *tz_full_name;
     if (selected_timezone == TZ_PACIFIC) {
         tz_name = is_dst ? "PDT" : "PST";
-    } else {
+        tz_full_name = is_dst ? "Pacific Daylight Time" : "Pacific Standard Time";
+    } else if (selected_timezone == TZ_ALASKA) {
         tz_name = is_dst ? "AKDT" : "AKST";
+        tz_full_name = is_dst ? "Alaska Daylight Time" : "Alaska Standard Time";
+    } else {
+        tz_name = "UTC";
+        tz_full_name = "Coordinated Universal Time";
     }
 
     printf("Location: %.4f° %s, %.4f° %s\n",
            fabs(latitude), latitude >= 0 ? "N" : "S",
            fabs(longitude), longitude >= 0 ? "E" : "W");
     printf("Date: %04d-%02d-%02d\n", year, month, day);
-    printf("Times shown in %s%s\n\n",
-           selected_timezone == TZ_PACIFIC ? "Pacific " : "Alaska ",
-           is_dst ? "Daylight Time" : "Standard Time");
+    printf("Times shown in %s\n\n", tz_full_name);
 
     if (times.sunrise.valid) {
         printf("Sunrise: %02d:%07.4f %s\n", times.sunrise.hour, times.sunrise.minute, tz_name);
@@ -372,8 +378,10 @@ while (utc_time >= 24.0) utc_time -= 24.0;
 double get_timezone_offset(void) {
     if (selected_timezone == TZ_PACIFIC) {
         return is_dst ? PDT_OFFSET : PST_OFFSET;
-    } else {
+    } else if (selected_timezone == TZ_ALASKA) {
         return is_dst ? AKDT_OFFSET : AKST_OFFSET;
+    } else {
+        return 0.0;  /* UTC has no offset */
     }
 }
 
