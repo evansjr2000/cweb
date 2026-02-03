@@ -76,12 +76,12 @@ int main(int argc, char *argv[]) {
     double latitude, longitude;
     int year, month, day;
 
-    if (argc != 7) {
-        printf("Usage: %s <latitude> <longitude> <year> <month> <day> <timezone>\n", argv[0]);
+    if (argc < 6 || argc > 7) {
+        printf("Usage: %s <latitude> <longitude> <year> <month> <day> [timezone]\n", argv[0]);
         printf("Example: %s 32.7157 -117.1611 2026 1 31 P\n", argv[0]);
         printf("  Latitude: -90 to 90 (negative for South)\n");
         printf("  Longitude: -180 to 180 (negative for West)\n");
-        printf("  Timezone: P = Pacific, A = Alaska\n");
+        printf("  Timezone: P = Pacific (default), A = Alaska\n");
         return 1;
     }
 
@@ -105,14 +105,19 @@ int main(int argc, char *argv[]) {
 }
 
 @ Parse the timezone argument. Valid values are `P' for Pacific and `A' for Alaska.
+If no timezone is specified, Pacific time is used by default.
 
 @<Parse timezone argument@>=
-selected_timezone = argv[6][0];
-if (selected_timezone == 'p') selected_timezone = 'P';
-if (selected_timezone == 'a') selected_timezone = 'A';
-if (selected_timezone != TZ_PACIFIC && selected_timezone != TZ_ALASKA) {
-    fprintf(stderr, "Error: Timezone must be P (Pacific) or A (Alaska)\n");
-    return 1;
+if (argc == 7) {
+    selected_timezone = argv[6][0];
+    if (selected_timezone == 'p') selected_timezone = 'P';
+    if (selected_timezone == 'a') selected_timezone = 'A';
+    if (selected_timezone != TZ_PACIFIC && selected_timezone != TZ_ALASKA) {
+        fprintf(stderr, "Error: Timezone must be P (Pacific) or A (Alaska)\n");
+        return 1;
+    }
+} else {
+    selected_timezone = TZ_PACIFIC;  /* Default to Pacific time */
 }
 
 @ Input validation ensures the coordinates and date are within valid ranges.

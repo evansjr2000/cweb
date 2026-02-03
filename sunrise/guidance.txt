@@ -19,3 +19,6 @@ TeX code, and compile the C code into an executable.
 9. Allow the user to select Pacific Time, or Alaska time (Anchorage, Alaska).  Automatically adjust
 for standard time or daylight savings time based on the input date.
 
+10.  If no timezone given on the command line, assume pacific time zone.
+
+
