@@ -36,7 +36,20 @@ the sun's semi-diameter (16 arcminutes).
 #define ZENITH 90.833
 #define DEG_TO_RAD(deg) ((deg) * PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / PI)
-#define PST_OFFSET (-8.0)  /* Pacific Standard Time: UTC-8 */
+
+/* Timezone offsets from UTC */
+#define PST_OFFSET (-8.0)   /* Pacific Standard Time: UTC-8 */
+#define PDT_OFFSET (-7.0)   /* Pacific Daylight Time: UTC-7 */
+#define AKST_OFFSET (-9.0)  /* Alaska Standard Time: UTC-9 */
+#define AKDT_OFFSET (-8.0)  /* Alaska Daylight Time: UTC-8 */
+
+/* Timezone selection */
+#define TZ_PACIFIC 'P'
+#define TZ_ALASKA 'A'
+
+/* Global timezone setting */
+char selected_timezone = TZ_PACIFIC;
+int is_dst = 0;
 
 @ We define a structure to hold the calculated sunrise and sunset times.
 
@@ -63,11 +76,12 @@ int main(int argc, char *argv[]) {
     double latitude, longitude;
     int year, month, day;
 
-    if (argc != 6) {
-        printf("Usage: %s <latitude> <longitude> <year> <month> <day>\n", argv[0]);
-        printf("Example: %s 40.7128 -74.0060 2024 6 21\n", argv[0]);
+    if (argc != 7) {
+        printf("Usage: %s <latitude> <longitude> <year> <month> <day> <timezone>\n", argv[0]);
+        printf("Example: %s 32.7157 -117.1611 2026 1 31 P\n", argv[0]);
         printf("  Latitude: -90 to 90 (negative for South)\n");
         printf("  Longitude: -180 to 180 (negative for West)\n");
+        printf("  Timezone: P = Pacific, A = Alaska\n");
         return 1;
     }
 
@@ -77,13 +91,28 @@ int main(int argc, char *argv[]) {
     month = atoi(argv[4]);
     day = atoi(argv[5]);
 
+    @<Parse timezone argument@>@;
     @<Validate input parameters@>@;
+
+    /* Determine if DST is in effect for the given date */
+    is_dst = is_daylight_saving_time(year, month, day);
 
     SunTimes times = calculate_sun_times(latitude, longitude, year, month, day);
 
     @<Display results@>@;
 
     return 0;
+}
+
+@ Parse the timezone argument. Valid values are `P' for Pacific and `A' for Alaska.
+
+@<Parse timezone argument@>=
+selected_timezone = argv[6][0];
+if (selected_timezone == 'p') selected_timezone = 'P';
+if (selected_timezone == 'a') selected_timezone = 'A';
+if (selected_timezone != TZ_PACIFIC && selected_timezone != TZ_ALASKA) {
+    fprintf(stderr, "Error: Timezone must be P (Pacific) or A (Alaska)\n");
+    return 1;
 }
 
 @ Input validation ensures the coordinates and date are within valid ranges.
@@ -107,35 +136,46 @@ if (day < 1 || day > 31) {
 }
 
 @ Display the calculated sunrise and sunset times in human-readable format.
-All times are displayed in Pacific Standard Time (PST). The display also
-includes the total sunshine duration for the day in hours.
+The display shows the selected timezone with automatic DST adjustment.
+The timezone abbreviation varies based on the timezone selection and DST status.
 
 @<Display results@>=
-printf("Location: %.4f° %s, %.4f° %s\n",
-       fabs(latitude), latitude >= 0 ? "N" : "S",
-       fabs(longitude), longitude >= 0 ? "E" : "W");
-printf("Date: %04d-%02d-%02d\n", year, month, day);
-printf("Times shown in Pacific Standard Time (PST)\n\n");
+{
+    const char *tz_name;
+    if (selected_timezone == TZ_PACIFIC) {
+        tz_name = is_dst ? "PDT" : "PST";
+    } else {
+        tz_name = is_dst ? "AKDT" : "AKST";
+    }
 
-if (times.sunrise.valid) {
-    printf("Sunrise: %02d:%07.4f PST\n", times.sunrise.hour, times.sunrise.minute);
-} else {
-    printf("Sunrise: No sunrise (polar night or midnight sun)\n");
-}
+    printf("Location: %.4f° %s, %.4f° %s\n",
+           fabs(latitude), latitude >= 0 ? "N" : "S",
+           fabs(longitude), longitude >= 0 ? "E" : "W");
+    printf("Date: %04d-%02d-%02d\n", year, month, day);
+    printf("Times shown in %s%s\n\n",
+           selected_timezone == TZ_PACIFIC ? "Pacific " : "Alaska ",
+           is_dst ? "Daylight Time" : "Standard Time");
 
-if (times.sunset.valid) {
-    printf("Sunset:  %02d:%07.4f PST\n", times.sunset.hour, times.sunset.minute);
-} else {
-    printf("Sunset:  No sunset (polar night or midnight sun)\n");
-}
+    if (times.sunrise.valid) {
+        printf("Sunrise: %02d:%07.4f %s\n", times.sunrise.hour, times.sunrise.minute, tz_name);
+    } else {
+        printf("Sunrise: No sunrise (polar night or midnight sun)\n");
+    }
 
-double sunshine = calculate_total_sunshine(times.sunrise, times.sunset);
-if (sunshine >= 0) {
-    int sunshine_hours = (int)sunshine;
-    double sunshine_minutes = (sunshine - sunshine_hours) * 60.0;
-    printf("\nTotal sunshine: %d hours and %.4f minutes\n", sunshine_hours, sunshine_minutes);
-} else {
-    printf("\nTotal sunshine: Cannot calculate (invalid sunrise or sunset)\n");
+    if (times.sunset.valid) {
+        printf("Sunset:  %02d:%07.4f %s\n", times.sunset.hour, times.sunset.minute, tz_name);
+    } else {
+        printf("Sunset:  No sunset (polar night or midnight sun)\n");
+    }
+
+    double sunshine = calculate_total_sunshine(times.sunrise, times.sunset);
+    if (sunshine >= 0) {
+        int sunshine_hours = (int)sunshine;
+        double sunshine_minutes = (sunshine - sunshine_hours) * 60.0;
+        printf("\nTotal sunshine: %d hours and %.4f minutes\n", sunshine_hours, sunshine_minutes);
+    } else {
+        printf("\nTotal sunshine: Cannot calculate (invalid sunrise or sunset)\n");
+    }
 }
 
 @* Astronomical Calculations.
@@ -149,6 +189,9 @@ double calculate_julian_day(int year, int month, int day);
 double calculate_time_utc(double julian_day, double lat, double lng, int is_sunrise);
 void utc_to_local_time(double utc_time, SunTime *result);
 double calculate_total_sunshine(SunTime sunrise, SunTime sunset);
+int is_daylight_saving_time(int year, int month, int day);
+int get_day_of_week(int year, int month, int day);
+double get_timezone_offset(void);
 
 @ The Julian day is a continuous count of days since the beginning of
 the Julian Period. It's used as a standard reference for astronomical
@@ -318,9 +361,20 @@ if (is_sunrise) {
 while (utc_time < 0) utc_time += 24.0;
 while (utc_time >= 24.0) utc_time -= 24.0;
 
-@ Convert UTC time (in decimal hours) to local Pacific Standard Time.
-PST is UTC$-8$ hours. The function handles day boundary crossings when
-the local time falls before midnight or after.
+@ Get the current timezone offset based on the selected timezone and DST status.
+
+@<Function implementations@>=
+double get_timezone_offset(void) {
+    if (selected_timezone == TZ_PACIFIC) {
+        return is_dst ? PDT_OFFSET : PST_OFFSET;
+    } else {
+        return is_dst ? AKDT_OFFSET : AKST_OFFSET;
+    }
+}
+
+@ Convert UTC time (in decimal hours) to local time based on the selected
+timezone. The function handles day boundary crossings when the local time
+falls before midnight or after.
 
 @<Function implementations@>=
 void utc_to_local_time(double utc_time, SunTime *result) {
@@ -331,8 +385,8 @@ void utc_to_local_time(double utc_time, SunTime *result) {
         return;
     }
 
-    /* Apply PST offset (UTC-8) */
-    double local_time = utc_time + PST_OFFSET;
+    /* Apply timezone offset based on selection and DST */
+    double local_time = utc_time + get_timezone_offset();
 
     /* Handle day boundary crossing */
     while (local_time < 0) local_time += 24.0;
@@ -361,6 +415,71 @@ double calculate_total_sunshine(SunTime sunrise, SunTime sunset) {
     double sunshine_hours = (sunset_minutes - sunrise_minutes) / 60.0;
 
     return sunshine_hours;
+}
+
+@* Daylight Saving Time Calculation.
+US Daylight Saving Time rules (since 2007):
+\item{$\bullet$} DST begins: Second Sunday of March at 2:00 AM local time
+\item{$\bullet$} DST ends: First Sunday of November at 2:00 AM local time
+
+@ Calculate the day of the week using Zeller's congruence.
+Returns 0 for Sunday, 1 for Monday, etc.
+
+@<Function implementations@>=
+int get_day_of_week(int year, int month, int day) {
+    /* Adjust for January and February */
+    if (month < 3) {
+        month += 12;
+        year--;
+    }
+
+    int k = year % 100;
+    int j = year / 100;
+
+    int dow = (day + (13 * (month + 1)) / 5 + k + k / 4 + j / 4 - 2 * j) % 7;
+
+    /* Adjust Zeller's result (Saturday=0) to Sunday=0 */
+    dow = (dow + 6) % 7;
+
+    return dow;
+}
+
+@ Determine if a given date falls within DST.
+This implements the US DST rules that have been in effect since 2007.
+DST starts on the second Sunday of March and ends on the first Sunday of November.
+
+@<Function implementations@>=
+int is_daylight_saving_time(int year, int month, int day) {
+    /* DST only applies to months March through November */
+    if (month < 3 || month > 11) {
+        return 0;  /* January, February, December: Standard time */
+    }
+    if (month > 3 && month < 11) {
+        return 1;  /* April through October: DST */
+    }
+
+    /* For March: DST starts on second Sunday */
+    if (month == 3) {
+        /* Find the second Sunday of March */
+        int first_day = get_day_of_week(year, 3, 1);  /* Day of week for March 1 */
+        int first_sunday = (first_day == 0) ? 1 : (8 - first_day);  /* First Sunday */
+        int second_sunday = first_sunday + 7;  /* Second Sunday */
+
+        /* DST starts at 2 AM on second Sunday */
+        return (day >= second_sunday) ? 1 : 0;
+    }
+
+    /* For November: DST ends on first Sunday */
+    if (month == 11) {
+        /* Find the first Sunday of November */
+        int first_day = get_day_of_week(year, 11, 1);  /* Day of week for Nov 1 */
+        int first_sunday = (first_day == 0) ? 1 : (8 - first_day);  /* First Sunday */
+
+        /* DST ends at 2 AM on first Sunday */
+        return (day < first_sunday) ? 1 : 0;
+    }
+
+    return 0;  /* Should not reach here */
 }
 
 @* Index.

@@ -16,8 +16,6 @@ TeX code, and compile the C code into an executable.
 
 8. Output the total sunshine in hours and minutes, with minutes to four decimal places.
 
-
-
-
-
+9. Allow the user to select Pacific Time, or Alaska time (Anchorage, Alaska).  Automatically adjust
+for standard time or daylight savings time based on the input date.
 
