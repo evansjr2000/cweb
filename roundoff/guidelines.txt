@@ -1,0 +1,18 @@
+1.  Take the following pseudo-code and write a C literate program roundoff.w to print out x after every
+30 iterations.  This program is to demonstrate what kind of round off error we get after 900 iterations.
+
+
+x = 1/3;
+kntr = 0;
+do
+kntr = kntr + 1;
+x = (9 * x + 1) * x - 1;
+while kntr < 900
+
+2.  Use the script cweb.sh to extract C code to compile and execute, and TeX code to compile
+and create a PDF of code documentation.
+
+3.  Modify the program to print out x every time through the loop.
+
+4.  Create a Makefile to make the binary, the documentation, and clean up the files in the directory.
+
