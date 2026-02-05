@@ -28,3 +28,5 @@ get a valid response? (Dumb error.  Forgot to copy file to /usr/local/bin.)
 12. Add another option for UTC as the timezone.
 
 
+13. Generate a bash script to run the program with the date varying from today until the summer solstice for San Diego, California.
+
