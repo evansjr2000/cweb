@@ -30,3 +30,5 @@ get a valid response? (Dumb error.  Forgot to copy file to /usr/local/bin.)
 
 13. Generate a bash script to run the program with the date varying from today until the summer solstice for San Diego, California.
 
+14.  Write a bash script to check if the docker daemon is running on my Mac Airbook, and if not, then start it.
+
