@@ -24,11 +24,37 @@ for standard time or daylight savings time based on the input date.
 11. How come when I enter the command "/usr/local/bin/sunrise 61.2181 -149.9003 2026 02 03 A", I do not
 get a valid response? (Dumb error.  Forgot to copy file to /usr/local/bin.)
 
-
 12. Add another option for UTC as the timezone.
-
 
 13. Generate a bash script to run the program with the date varying from today until the summer solstice for San Diego, California.
 
 14.  Write a bash script to check if the docker daemon is running on my Mac Airbook, and if not, then start it.
 
+15.  In the documentation create a glossary defining astronomical terms like  aberration, mean anomaly, equation of center, and orbital eccentrity.  Link to the terms in the glossary when the terms are used in the documemtation.  Create figures or diagrams to make the concepts clear.
+
+16.  Create the PDF file from the source file, sunrise.w, using the Makefile.  Correct for any error found in the process.
+
+17.  Add the following additional words, with their definitions clearly explained, to the glossary:
+
+     literate programming
+     solar declination
+     hour angle
+     atmospheric refraction
+     zenith angle
+     timezone
+     julian day
+     NOAA solar calculator spreadsheet algorithm
+     solar mean longitude
+     solar mean anomaly
+     equation of center
+     true longitude
+     right ascension
+     UTC
+     Zeller's congruence
+
+18. Make sure the glossary is alphabetized, and the glossary terms as used in the code documentation are
+placed in the index.
+
+
+     
+     

@@ -1,4 +1,26 @@
+% Cross-reference support for plain TeX (label/pageref mechanism).
+% On first pass, \pageref outputs ??; on second pass it outputs the page number.
+\openin15=\jobname.xrf
+\ifeof15\relax
+\else
+  \closein15
+  \input\jobname.xrf
+\fi
+\newwrite\xrfout
+\immediate\openout\xrfout=\jobname.xrf
+\def\label#1{%
+  \immediate\write\xrfout{%
+    \string\expandafter\string\gdef
+    \string\csname\space lbl:#1\string\endcsname{\the\pageno}%
+  }%
+}
+\def\pageref#1{%
+  \ifcsname lbl:#1\endcsname\csname lbl:#1\endcsname\else{??}\fi
+}
+
 @* Introduction.
+@^NOAA Solar Calculator Algorithm@>
+@^Literate Programming@>
 This program calculates sunrise and sunset times for any given location
 and date using the simplified NOAA (National Oceanic and Atmospheric
 Administration) algorithm. The program demonstrates literate programming
@@ -7,8 +29,11 @@ calculations transparent and maintainable.
 
 The algorithm accounts for:
 \item{$\bullet$} Solar declination (the sun's position relative to Earth's equator)
+@^Solar Declination@>
 \item{$\bullet$} Hour angle (the sun's angular distance from the meridian)
+@^Hour Angle@>
 \item{$\bullet$} Atmospheric refraction (light bending near the horizon)
+@^Atmospheric Refraction@>
 
 @c
 @<Header files@>@;
@@ -28,6 +53,8 @@ input/output, and time handling.
 #include <time.h>
 
 @ We define constants for the astronomical calculations. The zenith angle
+@^Zenith Angle@>
+@^Atmospheric Refraction@>
 of 90.833 degrees accounts for atmospheric refraction (34 arcminutes) and
 the sun's semi-diameter (16 arcminutes).
 
@@ -190,6 +217,8 @@ The timezone abbreviation varies based on the timezone selection and DST status.
 }
 
 @* Astronomical Calculations.
+@^NOAA Solar Calculator Algorithm@>
+@^Julian Day@>
 The core algorithm follows the NOAA method, which calculates the Julian day,
 solar position, and time correction factors.
 
@@ -204,7 +233,7 @@ int is_daylight_saving_time(int year, int month, int day);
 int get_day_of_week(int year, int month, int day);
 double get_timezone_offset(void);
 
-@ The Julian day is a continuous count of days since the beginning of
+@ The Julian day @^Julian Day@> is a continuous count of days since the beginning of
 the Julian Period. It's used as a standard reference for astronomical
 calculations.
 
@@ -252,7 +281,8 @@ SunTimes calculate_sun_times(double lat, double lng, int year, int month, int da
     return times;
 }
 
-@ The heart of the algorithm: calculating the exact UTC time of sunrise or sunset.
+@ The heart of the algorithm: calculating the exact UTC @^UTC@> time of sunrise or sunset.
+@^NOAA Solar Calculator Algorithm@>
 This implements the NOAA Solar Calculator spreadsheet algorithm, which provides
 accurate results by properly computing the equation of time and solar noon.
 
@@ -275,13 +305,16 @@ double calculate_time_utc(double jd, double lat, double lng, int is_sunrise) {
     return utc_time;
 }
 
-@ The mean longitude of the sun, corrected for aberration.
+@ The solar mean longitude @^Solar Mean Longitude@> of the sun, corrected for
+{\it aberration\/} @^Aberration@> (see Glossary, p.~\pageref{gloss:aberration}).
 
 @<Calculate solar mean longitude@>=
 double mean_long = fmod(280.46646 + 36000.76983 * t + 0.0003032 * t * t, 360.0);
 while (mean_long < 0) mean_long += 360.0;
 
-@ The mean anomaly represents the angle between the sun's position and its
+@ The {\it mean anomaly\/} @^Mean Anomaly@>@^Solar Mean Anomaly@>
+(see Glossary, p.~\pageref{gloss:mean_anomaly})
+represents the angle between the sun's position and its
 position at perihelion (closest approach to Earth). We normalize to $0$--$360$
 degrees.
 
@@ -290,13 +323,17 @@ double mean_anom_deg = fmod(357.52911 + 35999.05029 * t - 0.0001537 * t * t, 360
 while (mean_anom_deg < 0) mean_anom_deg += 360.0;
 double mean_anom = DEG_TO_RAD(mean_anom_deg);
 
-@ Earth's orbital eccentricity changes slowly over time. This value is needed
+@ Earth's {\it orbital eccentricity\/} @^Orbital Eccentricity@>
+(see Glossary, p.~\pageref{gloss:eccentricity})
+changes slowly over time. This value is needed
 for the equation of time calculation.
 
 @<Calculate eccentricity@>=
 double eccent = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
 
-@ The equation of center corrects for Earth's elliptical orbit.
+@ The {\it equation of center\/} @^Equation of Center@>
+(see Glossary, p.~\pageref{gloss:eq_of_center})
+corrects for Earth's elliptical orbit.
 
 @<Calculate equation of center@>=
 double center = sin(mean_anom) * (1.914602 - 0.004817 * t - 0.000014 * t * t)
@@ -304,7 +341,7 @@ double center = sin(mean_anom) * (1.914602 - 0.004817 * t - 0.000014 * t * t)
               + sin(3 * mean_anom) * 0.000289;
 
 @ Combine the mean longitude and equation of center to get the sun's
-true ecliptic longitude.
+true ecliptic longitude. @^True Longitude@>@^Right Ascension@>
 
 @<Calculate true longitude and right ascension@>=
 double true_long = mean_long + center;
@@ -315,7 +352,7 @@ double right_asc = RAD_TO_DEG(atan2(cos(DEG_TO_RAD(obliq)) * sin(DEG_TO_RAD(appa
 while (right_asc < 0) right_asc += 360.0;
 while (right_asc >= 360.0) right_asc -= 360.0;
 
-@ Solar declination is the angle between the sun's rays and the equatorial plane.
+@ Solar declination @^Solar Declination@> is the angle between the sun's rays and the equatorial plane.
 
 @<Calculate solar declination@>=
 double declination = RAD_TO_DEG(asin(sin(DEG_TO_RAD(obliq)) * sin(DEG_TO_RAD(apparent_long))));
@@ -337,7 +374,8 @@ double eq_time = 4.0 * RAD_TO_DEG(
     - 1.25 * eccent * eccent * sin(2.0 * mean_anom)
 );  /* Result in minutes */
 
-@ The hour angle is the angular distance of the sun from the local meridian.
+@ The hour angle @^Hour Angle@> is the angular distance of the sun from the local meridian.
+@^Zenith Angle@>@^Atmospheric Refraction@>@^Solar Declination@>
 If the calculation fails (returns NaN), it indicates polar day or night.
 The hour angle is always returned as a positive value representing the
 angular distance from solar noon.
@@ -372,7 +410,7 @@ if (is_sunrise) {
 while (utc_time < 0) utc_time += 24.0;
 while (utc_time >= 24.0) utc_time -= 24.0;
 
-@ Get the current timezone offset based on the selected timezone and DST status.
+@ Get the current timezone @^Timezone@>@^UTC@> offset based on the selected timezone and DST status.
 
 @<Function implementations@>=
 double get_timezone_offset(void) {
@@ -385,8 +423,8 @@ double get_timezone_offset(void) {
     }
 }
 
-@ Convert UTC time (in decimal hours) to local time based on the selected
-timezone. The function handles day boundary crossings when the local time
+@ Convert UTC @^UTC@> time (in decimal hours) to local time based on the selected
+timezone. @^Timezone@> The function handles day boundary crossings when the local time
 falls before midnight or after.
 
 @<Function implementations@>=
@@ -431,11 +469,12 @@ double calculate_total_sunshine(SunTime sunrise, SunTime sunset) {
 }
 
 @* Daylight Saving Time Calculation.
+@^Timezone@>
 US Daylight Saving Time rules (since 2007):
 \item{$\bullet$} DST begins: Second Sunday of March at 2:00 AM local time
 \item{$\bullet$} DST ends: First Sunday of November at 2:00 AM local time
 
-@ Calculate the day of the week using Zeller's congruence.
+@ Calculate the day of the week using Zeller's congruence. @^Zeller's Congruence@>
 Returns 0 for Sunday, 1 for Monday, etc.
 
 @<Function implementations@>=
@@ -494,5 +533,192 @@ int is_daylight_saving_time(int year, int month, int day) {
 
     return 0;  /* Should not reach here */
 }
+
+@* Glossary.
+The following astronomical and computational terms are used in this program.
+Entries are arranged alphabetically.
+
+\medskip
+\noindent\label{gloss:aberration}{\bf Aberration.}\quad
+The apparent displacement of a celestial body from its true geometric position,
+caused by the finite speed of light combined with Earth's orbital motion around
+the Sun. Because light takes time to travel from the Sun to Earth, the Sun
+appears shifted slightly in the direction of Earth's motion. The annual
+aberration reaches a maximum of about 20.5 arcseconds. In this program,
+aberration is accounted for in the computation of the Sun's apparent longitude
+by subtracting a small correction term ($0.00569$ degrees) from the true
+ecliptic longitude.
+
+\medskip
+\noindent\label{gloss:atm_refraction}{\bf Atmospheric Refraction.}\quad
+The bending of light as it passes through Earth's atmosphere, causing the Sun
+to appear slightly higher above the horizon than its true geometric position.
+Refraction is strongest near the horizon, where light traverses the greatest
+thickness of air. The standard correction near the horizon amounts to
+approximately 34~arcminutes. In this program, atmospheric refraction is combined
+with the Sun's angular semi-diameter (16~arcminutes) in the zenith angle
+(see Glossary, p.~\pageref{gloss:zenith}) of 90.833$\deg$, which defines the
+threshold for sunrise and sunset calculations.
+
+\medskip
+\noindent\label{gloss:eq_of_center}{\bf Equation of Center.}\quad
+The angular difference between the Sun's true anomaly (its actual position in
+the elliptical orbit) and its mean anomaly (the position it would occupy in a
+uniform circular orbit). It arises from Kepler's second law: a planet moves
+faster near perihelion and slower near aphelion. The equation of center is
+computed as a Fourier series in the mean anomaly and is added to the mean
+longitude to obtain the Sun's true ecliptic longitude. At Earth's eccentricity,
+the equation of center reaches a maximum of roughly $1.9$ degrees.
+
+\medskip
+\noindent\label{gloss:hour_angle}{\bf Hour Angle.}\quad
+The angular distance of the Sun westward from the local meridian, measured
+along the celestial equator and expressed in degrees (where $15\deg = 1$~hour).
+The hour angle is zero at solar noon, negative before noon, and positive after
+noon. At sunrise and sunset, the hour angle has equal magnitude and opposite
+sign. In this program, the hour angle is derived from the solar declination
+(see Glossary, p.~\pageref{gloss:solar_decl}) and the observer's latitude,
+using the zenith angle (see Glossary, p.~\pageref{gloss:zenith}) to account
+for atmospheric refraction (see Glossary, p.~\pageref{gloss:atm_refraction}).
+
+\medskip
+\noindent\label{gloss:julian_day}{\bf Julian Day.}\quad
+A continuous count of days and fractions of days since noon, January~1,
+4713~BC (Julian calendar), used as a universal reference for astronomical
+calculations. The integer part is the Julian Day Number; the fractional part
+represents the time within the day. Using Julian Days eliminates calendar
+irregularities such as leap years and varying month lengths. In this program,
+the Julian Day is converted to Julian centuries since the J2000.0 epoch
+(noon, January~1, 2000~UTC), which is the time variable used throughout the
+NOAA solar algorithm (see Glossary, p.~\pageref{gloss:noaa}).
+
+\medskip
+\noindent\label{gloss:literate_prog}{\bf Literate Programming.}\quad
+A software development methodology introduced by Donald~E. Knuth in which a
+program is written primarily as a human-readable narrative, with code woven
+into the prose. The documentation and code are maintained in a single source
+file; two tools extract the components: {\tt ctangle} produces compilable
+C~code, and {\tt cweave} generates \TeX\ source for typeset documentation.
+This program is written in the CWEB variant of literate programming, and the
+document you are reading was produced by {\tt cweave} from {\tt sunrise.w}.
+
+\medskip
+\noindent\label{gloss:mean_anomaly}{\bf Mean Anomaly (Solar Mean Anomaly).}\quad
+The angle that would be swept out by a hypothetical planet moving at uniform
+speed in a circular orbit of the same period as the actual elliptical orbit,
+measured from the point of perihelion (the point of closest approach to the
+Sun). The mean anomaly increases linearly with time and is used as the starting
+point for computing the true position of the Sun in its elliptical orbit. The
+difference between the true anomaly and the mean anomaly is the equation of
+center (see Glossary, p.~\pageref{gloss:eq_of_center}).
+
+\medskip
+\noindent\label{gloss:noaa}{\bf NOAA Solar Calculator Spreadsheet Algorithm.}\quad
+A method for computing sunrise and sunset times developed by the National
+Oceanic and Atmospheric Administration (NOAA) Earth System Research Laboratory,
+based on Jean Meeus's {\it Astronomical Algorithms}. The algorithm computes
+Julian centuries since J2000.0, the solar mean longitude
+(see Glossary, p.~\pageref{gloss:solar_mean_long}), mean anomaly
+(see Glossary, p.~\pageref{gloss:mean_anomaly}), equation of center
+(see Glossary, p.~\pageref{gloss:eq_of_center}), true and apparent longitude,
+solar declination (see Glossary, p.~\pageref{gloss:solar_decl}), equation of
+time, and the hour angle (see Glossary, p.~\pageref{gloss:hour_angle}) at
+sunrise and sunset. It provides accuracy within approximately one minute
+for dates within several centuries of the present.
+
+\medskip
+\noindent\label{gloss:eccentricity}{\bf Orbital Eccentricity.}\quad
+A dimensionless parameter that describes how much an elliptical orbit deviates
+from a perfect circle. An eccentricity of $0$ corresponds to a circular orbit,
+while a value approaching $1$ describes a highly elongated ellipse. Earth's
+orbital eccentricity is approximately $0.0167$, meaning the Sun--Earth distance
+varies by about 3.3\% between perihelion (early January) and aphelion (early
+July). This small variation causes the equation of time to depart from zero and
+affects the duration of the seasons.
+
+\medskip
+\noindent\label{gloss:right_asc}{\bf Right Ascension.}\quad
+The celestial equivalent of geographic longitude, measuring the angular distance
+of a point on the celestial sphere eastward along the celestial equator from
+the vernal equinox, expressed in hours, minutes, and seconds (where
+$24^{\rm h} = 360\deg$). In this program, the Sun's right ascension is computed
+from its apparent ecliptic longitude and the obliquity of the ecliptic using
+the two-argument arctangent function, and serves as an intermediate step in
+computing the equation of time.
+
+\medskip
+\noindent\label{gloss:solar_decl}{\bf Solar Declination.}\quad
+The angle between the Sun's rays and the plane of Earth's equator, ranging
+from $+23.5\deg$ at the June solstice to $-23.5\deg$ at the December solstice,
+passing through zero at the equinoxes. Solar declination determines how high
+the Sun rises and how long it remains above the horizon each day. In this
+program, declination is computed from the Sun's apparent ecliptic longitude and
+the obliquity of the ecliptic (Earth's axial tilt of approximately $23.4\deg$).
+
+\medskip
+\noindent\label{gloss:solar_mean_long}{\bf Solar Mean Longitude.}\quad
+The ecliptic longitude the Sun would have if it moved at a perfectly uniform
+rate in a circular orbit, without perturbation from Earth's elliptical motion.
+It increases by approximately $360\deg$ per year. The difference between the
+true longitude (see Glossary, p.~\pageref{gloss:true_long}) and the mean
+longitude is primarily the equation of center
+(see Glossary, p.~\pageref{gloss:eq_of_center}). A further correction for
+aberration (see Glossary, p.~\pageref{gloss:aberration}) yields the apparent
+longitude used in the declination and right ascension calculations.
+
+\medskip
+\noindent\label{gloss:timezone}{\bf Timezone.}\quad
+A region of the globe that observes the same standard time, defined as an
+offset from Coordinated Universal Time (UTC,
+see Glossary, p.~\pageref{gloss:utc}). This program supports three timezone
+options: Pacific Time (UTC$-8$ standard, UTC$-7$ daylight saving time),
+Alaska Time (UTC$-9$ standard, UTC$-8$ daylight saving time), and UTC itself.
+Daylight saving time is determined automatically from the input date using
+current US DST rules (second Sunday of March through first Sunday of November).
+
+\medskip
+\noindent\label{gloss:true_long}{\bf True Longitude.}\quad
+The Sun's actual ecliptic longitude, obtained by adding the equation of center
+(see Glossary, p.~\pageref{gloss:eq_of_center}) to the solar mean longitude
+(see Glossary, p.~\pageref{gloss:solar_mean_long}). It represents the Sun's
+true position in its elliptical orbit projected onto the ecliptic plane. A
+further small correction for nutation and aberration
+(see Glossary, p.~\pageref{gloss:aberration}) yields the apparent longitude,
+from which the solar declination (see Glossary, p.~\pageref{gloss:solar_decl})
+and right ascension (see Glossary, p.~\pageref{gloss:right_asc}) are derived.
+
+\medskip
+\noindent\label{gloss:utc}{\bf UTC (Coordinated Universal Time).}\quad
+The primary international time standard by which the world regulates clocks.
+UTC is kept by a weighted average of more than 400 atomic clocks in over
+50~national laboratories worldwide, occasionally adjusted by leap seconds to
+remain within $0.9$~seconds of UT1 (astronomical time based on Earth's
+rotation). All local timezone offsets are defined relative to UTC. In this
+program, sunrise and sunset times are first computed in UTC using the NOAA
+algorithm (see Glossary, p.~\pageref{gloss:noaa}), then converted to the
+selected local timezone (see Glossary, p.~\pageref{gloss:timezone}).
+
+\medskip
+\noindent\label{gloss:zeller}{\bf Zeller's Congruence.}\quad
+A formula developed by Christian Zeller in 1887 for determining the day of the
+week from any given Gregorian calendar date, using modular arithmetic to map
+the date to an integer from~0 to~6. In this program, Zeller's congruence is
+used to locate the second Sunday of March (beginning of daylight saving time)
+and the first Sunday of November (end of daylight saving time), enabling
+automatic DST adjustment for Pacific and Alaska timezones
+(see Glossary, p.~\pageref{gloss:timezone}).
+
+\medskip
+\noindent\label{gloss:zenith}{\bf Zenith Angle.}\quad
+The angle between the Sun and the observer's zenith (the point directly
+overhead), complementary to the altitude angle. A zenith angle of $0\deg$
+means the Sun is overhead; $90\deg$ places it geometrically on the horizon.
+For sunrise and sunset, a zenith angle of $90.833\deg$ is used, accounting
+for two effects: (1)~atmospheric refraction
+(see Glossary, p.~\pageref{gloss:atm_refraction}) bends sunlight upward by
+approximately 34~arcminutes, making the Sun appear above the horizon even when
+geometrically below it; and (2)~the Sun's angular semi-diameter of
+16~arcminutes, so that sunrise is defined as the moment the Sun's upper limb
+appears at the horizon.
 
 @* Index.

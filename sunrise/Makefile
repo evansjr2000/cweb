@@ -40,7 +40,8 @@ $(TEX_SRC): $(CWEB_SRC)
 	$(DOCKER_RUN) -c "cweave $(CWEB_SRC)"
 
 $(PDF_DOC): $(TEX_SRC)
-	$(DOCKER_RUN) -c "pdftex $(TEX_SRC)"
+	-rm -f $(PROG).xrf
+	$(DOCKER_RUN) -c "pdftex $(TEX_SRC) && pdftex $(TEX_SRC)"
 
 # Compile the C code into an executable
 exe: $(EXE)
