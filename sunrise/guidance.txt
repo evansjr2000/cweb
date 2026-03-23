@@ -55,6 +55,7 @@ get a valid response? (Dumb error.  Forgot to copy file to /usr/local/bin.)
 18. Make sure the glossary is alphabetized, and the glossary terms as used in the code documentation are
 placed in the index.
 
+19.  Besides outputting the sunrise and sunset that is calculated using the NOAA algorithms, also compute the sunrise and sunset assuming the sun is a point source, and that there is no atmospheric light refraction.  
 
      
      

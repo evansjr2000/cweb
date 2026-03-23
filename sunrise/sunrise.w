@@ -56,11 +56,14 @@ input/output, and time handling.
 @^Zenith Angle@>
 @^Atmospheric Refraction@>
 of 90.833 degrees accounts for atmospheric refraction (34 arcminutes) and
-the sun's semi-diameter (16 arcminutes).
+the sun's semi-diameter (16 arcminutes). A second zenith constant of exactly
+90.0 degrees treats the sun as a geometric point source with no atmospheric
+refraction, yielding the purely geometric sunrise and sunset times.
 
 @<Global constants@>=
 #define PI 3.14159265358979323846
-#define ZENITH 90.833
+#define ZENITH 90.833        /* NOAA standard: refraction + semi-diameter */
+#define ZENITH_GEOMETRIC 90.0 /* Point source, no atmospheric refraction */
 #define DEG_TO_RAD(deg) ((deg) * PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / PI)
 
@@ -92,6 +95,11 @@ typedef struct {
     SunTime sunrise;
     SunTime sunset;
 } SunTimes;
+
+typedef struct {
+    SunTimes standard;   /* NOAA standard: includes atmospheric refraction */
+    SunTimes geometric;  /* Point source, no atmospheric refraction */
+} SunTimesSet;
 
 @* Main Program.
 The main program parses command-line arguments for latitude, longitude,
@@ -125,7 +133,7 @@ int main(int argc, char *argv[]) {
     /* Determine if DST is in effect for the given date */
     is_dst = is_daylight_saving_time(year, month, day);
 
-    SunTimes times = calculate_sun_times(latitude, longitude, year, month, day);
+    SunTimesSet times = calculate_sun_times(latitude, longitude, year, month, day);
 
     @<Display results@>@;
 
@@ -172,6 +180,10 @@ if (day < 1 || day > 31) {
 @ Display the calculated sunrise and sunset times in human-readable format.
 The display shows the selected timezone with automatic DST adjustment.
 The timezone abbreviation varies based on the timezone selection and DST status.
+Two sets of results are shown: the standard NOAA calculation (which accounts for
+atmospheric refraction and the sun's angular semi-diameter via a zenith of 90.833$^\circ$),
+and the geometric calculation (which treats the sun as a point source with no
+atmospheric refraction, using a zenith of exactly 90$^\circ$).
 
 @<Display results@>=
 {
@@ -188,31 +200,62 @@ The timezone abbreviation varies based on the timezone selection and DST status.
         tz_full_name = "Coordinated Universal Time";
     }
 
-    printf("Location: %.4f° %s, %.4f° %s\n",
+    printf("Location: %.4f\260 %s, %.4f\260 %s\n",
            fabs(latitude), latitude >= 0 ? "N" : "S",
            fabs(longitude), longitude >= 0 ? "E" : "W");
     printf("Date: %04d-%02d-%02d\n", year, month, day);
     printf("Times shown in %s\n\n", tz_full_name);
 
-    if (times.sunrise.valid) {
-        printf("Sunrise: %02d:%07.4f %s\n", times.sunrise.hour, times.sunrise.minute, tz_name);
+    /* --- NOAA Standard (with atmospheric refraction) --- */
+    printf("=== NOAA Standard (zenith 90.833\260: refraction + solar disc) ===\n");
+    if (times.standard.sunrise.valid) {
+        printf("Sunrise: %02d:%07.4f %s\n",
+               times.standard.sunrise.hour, times.standard.sunrise.minute, tz_name);
     } else {
         printf("Sunrise: No sunrise (polar night or midnight sun)\n");
     }
-
-    if (times.sunset.valid) {
-        printf("Sunset:  %02d:%07.4f %s\n", times.sunset.hour, times.sunset.minute, tz_name);
+    if (times.standard.sunset.valid) {
+        printf("Sunset:  %02d:%07.4f %s\n",
+               times.standard.sunset.hour, times.standard.sunset.minute, tz_name);
     } else {
         printf("Sunset:  No sunset (polar night or midnight sun)\n");
     }
+    {
+        double sunshine = calculate_total_sunshine(times.standard.sunrise, times.standard.sunset);
+        if (sunshine >= 0) {
+            int sunshine_hours = (int)sunshine;
+            double sunshine_minutes = (sunshine - sunshine_hours) * 60.0;
+            printf("Total sunshine: %d hours and %.4f minutes\n\n",
+                   sunshine_hours, sunshine_minutes);
+        } else {
+            printf("Total sunshine: Cannot calculate (invalid sunrise or sunset)\n\n");
+        }
+    }
 
-    double sunshine = calculate_total_sunshine(times.sunrise, times.sunset);
-    if (sunshine >= 0) {
-        int sunshine_hours = (int)sunshine;
-        double sunshine_minutes = (sunshine - sunshine_hours) * 60.0;
-        printf("\nTotal sunshine: %d hours and %.4f minutes\n", sunshine_hours, sunshine_minutes);
+    /* --- Geometric (point source, no atmospheric refraction) --- */
+    printf("=== Geometric (zenith 90.000\260: point source, no refraction) ===\n");
+    if (times.geometric.sunrise.valid) {
+        printf("Sunrise: %02d:%07.4f %s\n",
+               times.geometric.sunrise.hour, times.geometric.sunrise.minute, tz_name);
     } else {
-        printf("\nTotal sunshine: Cannot calculate (invalid sunrise or sunset)\n");
+        printf("Sunrise: No sunrise (polar night or midnight sun)\n");
+    }
+    if (times.geometric.sunset.valid) {
+        printf("Sunset:  %02d:%07.4f %s\n",
+               times.geometric.sunset.hour, times.geometric.sunset.minute, tz_name);
+    } else {
+        printf("Sunset:  No sunset (polar night or midnight sun)\n");
+    }
+    {
+        double sunshine = calculate_total_sunshine(times.geometric.sunrise, times.geometric.sunset);
+        if (sunshine >= 0) {
+            int sunshine_hours = (int)sunshine;
+            double sunshine_minutes = (sunshine - sunshine_hours) * 60.0;
+            printf("Total sunshine: %d hours and %.4f minutes\n",
+                   sunshine_hours, sunshine_minutes);
+        } else {
+            printf("Total sunshine: Cannot calculate (invalid sunrise or sunset)\n");
+        }
     }
 }
 
@@ -223,10 +266,10 @@ The core algorithm follows the NOAA method, which calculates the Julian day,
 solar position, and time correction factors.
 
 @<Function prototypes@>=
-SunTimes calculate_sun_times(double lat, double lng, int year, int month, int day);
+SunTimesSet calculate_sun_times(double lat, double lng, int year, int month, int day);
 int day_of_year(int year, int month, int day);
 double calculate_julian_day(int year, int month, int day);
-double calculate_time_utc(double julian_day, double lat, double lng, int is_sunrise);
+double calculate_time_utc(double julian_day, double lat, double lng, int is_sunrise, double zenith);
 void utc_to_local_time(double utc_time, SunTime *result);
 double calculate_total_sunshine(SunTime sunrise, SunTime sunset);
 int is_daylight_saving_time(int year, int month, int day);
@@ -264,21 +307,28 @@ int day_of_year(int year, int month, int day) {
 }
 
 @ The main calculation function coordinates all the astronomical computations.
-It calculates both sunrise and sunset by calling the UTC time calculation
-with appropriate flags.
+It calculates both sunrise and sunset for two zenith values: the NOAA standard
+(90.833$^\circ$, accounting for atmospheric refraction and solar disc) and the
+geometric case (90.0$^\circ$, treating the sun as a point source with no refraction).
 
 @<Function implementations@>=
-SunTimes calculate_sun_times(double lat, double lng, int year, int month, int day) {
-    SunTimes times;
+SunTimesSet calculate_sun_times(double lat, double lng, int year, int month, int day) {
+    SunTimesSet result;
     double jd = calculate_julian_day(year, month, day);
 
-    double sunrise_utc = calculate_time_utc(jd, lat, lng, 1);
-    double sunset_utc = calculate_time_utc(jd, lat, lng, 0);
+    /* Standard NOAA calculation: zenith includes refraction and solar semi-diameter */
+    double sunrise_utc = calculate_time_utc(jd, lat, lng, 1, ZENITH);
+    double sunset_utc  = calculate_time_utc(jd, lat, lng, 0, ZENITH);
+    utc_to_local_time(sunrise_utc, &result.standard.sunrise);
+    utc_to_local_time(sunset_utc,  &result.standard.sunset);
 
-    utc_to_local_time(sunrise_utc, &times.sunrise);
-    utc_to_local_time(sunset_utc, &times.sunset);
+    /* Geometric calculation: sun as point source, no atmospheric refraction */
+    double sunrise_geo = calculate_time_utc(jd, lat, lng, 1, ZENITH_GEOMETRIC);
+    double sunset_geo  = calculate_time_utc(jd, lat, lng, 0, ZENITH_GEOMETRIC);
+    utc_to_local_time(sunrise_geo, &result.geometric.sunrise);
+    utc_to_local_time(sunset_geo,  &result.geometric.sunset);
 
-    return times;
+    return result;
 }
 
 @ The heart of the algorithm: calculating the exact UTC @^UTC@> time of sunrise or sunset.
@@ -289,7 +339,7 @@ accurate results by properly computing the equation of time and solar noon.
 The |is_sunrise| parameter determines whether we calculate sunrise (1) or sunset (0).
 
 @<Function implementations@>=
-double calculate_time_utc(double jd, double lat, double lng, int is_sunrise) {
+double calculate_time_utc(double jd, double lat, double lng, int is_sunrise, double zenith) {
     double t = (jd - 2451545.0) / 36525.0;  /* Julian centuries since J2000.0 */
 
     @<Calculate solar mean longitude@>@;
@@ -381,7 +431,7 @@ The hour angle is always returned as a positive value representing the
 angular distance from solar noon.
 
 @<Calculate hour angle@>=
-double cos_hour_angle = (cos(DEG_TO_RAD(ZENITH)) -
+double cos_hour_angle = (cos(DEG_TO_RAD(zenith)) -
                          sin(DEG_TO_RAD(lat)) * sin(DEG_TO_RAD(declination))) /
                         (cos(DEG_TO_RAD(lat)) * cos(DEG_TO_RAD(declination)));
 
@@ -713,12 +763,17 @@ automatic DST adjustment for Pacific and Alaska timezones
 The angle between the Sun and the observer's zenith (the point directly
 overhead), complementary to the altitude angle. A zenith angle of $0\deg$
 means the Sun is overhead; $90\deg$ places it geometrically on the horizon.
-For sunrise and sunset, a zenith angle of $90.833\deg$ is used, accounting
-for two effects: (1)~atmospheric refraction
+For sunrise and sunset, a zenith angle of $90.833\deg$ is used in the NOAA
+standard calculation, accounting for two effects: (1)~atmospheric refraction
 (see Glossary, p.~\pageref{gloss:atm_refraction}) bends sunlight upward by
 approximately 34~arcminutes, making the Sun appear above the horizon even when
 geometrically below it; and (2)~the Sun's angular semi-diameter of
 16~arcminutes, so that sunrise is defined as the moment the Sun's upper limb
 appears at the horizon.
+This program also computes a {\it geometric\/} sunrise and sunset using a
+zenith angle of exactly $90\deg$, which treats the Sun as a point source with
+no atmospheric refraction. The difference between the two results (typically
+2--3~minutes at mid-latitudes) quantifies the combined effect of refraction and
+the solar disc size.
 
 @* Index.
