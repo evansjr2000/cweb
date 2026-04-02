@@ -38,6 +38,7 @@ get a valid response? (Dumb error.  Forgot to copy file to /usr/local/bin.)
 
      literate programming
      solar declination
+     solar noon
      hour angle
      atmospheric refraction
      zenith angle
@@ -58,4 +59,5 @@ placed in the index.
 19.  Besides outputting the sunrise and sunset that is calculated using the NOAA algorithms, also compute the sunrise and sunset assuming the sun is a point source, and that there is no atmospheric light refraction.  
 
      
-     
+20.  Calculate and output the angle of the sun above the horizon an observer at the specified latitude and longitude would see at solar noon.
+

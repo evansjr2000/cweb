@@ -257,6 +257,13 @@ atmospheric refraction, using a zenith of exactly 90$^\circ$).
             printf("Total sunshine: Cannot calculate (invalid sunrise or sunset)\n");
         }
     }
+
+    /* --- Solar Noon Elevation --- */
+    {
+        double noon_elev = calculate_solar_noon_elevation(latitude, year, month, day);
+        printf("\n=== Solar Noon Elevation ===\n");
+        printf("Solar elevation angle above horizon at solar noon: %.4f\260\n", noon_elev);
+    }
 }
 
 @* Astronomical Calculations.
@@ -275,6 +282,7 @@ double calculate_total_sunshine(SunTime sunrise, SunTime sunset);
 int is_daylight_saving_time(int year, int month, int day);
 int get_day_of_week(int year, int month, int day);
 double get_timezone_offset(void);
+double calculate_solar_noon_elevation(double lat, int year, int month, int day);
 
 @ The Julian day @^Julian Day@> is a continuous count of days since the beginning of
 the Julian Period. It's used as a standard reference for astronomical
@@ -518,6 +526,56 @@ double calculate_total_sunshine(SunTime sunrise, SunTime sunset) {
     return sunshine_hours;
 }
 
+@ Calculate the solar elevation angle above the horizon at solar noon.
+@^Solar Noon@>@^Solar Declination@>@^Hour Angle@>
+The {\it elevation angle\/} is the angle between the Sun and the observer's
+horizon, measured upward from the horizon plane ($0\deg$ at the horizon,
+$90\deg$ directly overhead). At {\it solar noon\/}
+(see Glossary, p.~\pageref{gloss:solar_noon}) the hour angle
+(see Glossary, p.~\pageref{gloss:hour_angle}) is zero, so the general altitude formula
+reduces to:
+$$\sin(\alpha) = \sin(\phi)\sin(\delta) + \cos(\phi)\cos(\delta)$$
+where $\alpha$ is the elevation angle above the horizon, $\phi$ is the observer's
+latitude, and $\delta$ is the solar declination
+(see Glossary, p.~\pageref{gloss:solar_decl}).
+The function recomputes the declination from the Julian day using the same NOAA
+intermediate quantities as |calculate_time_utc|.
+
+@<Function implementations@>=
+double calculate_solar_noon_elevation(double lat, int year, int month, int day) {
+    double jd = calculate_julian_day(year, month, day);
+    double t = (jd - 2451545.0) / 36525.0;  /* Julian centuries since J2000.0 */
+
+    /* Solar mean longitude */
+    double mean_long = fmod(280.46646 + 36000.76983 * t + 0.0003032 * t * t, 360.0);
+    while (mean_long < 0) mean_long += 360.0;
+
+    /* Solar mean anomaly */
+    double mean_anom_deg = fmod(357.52911 + 35999.05029 * t - 0.0001537 * t * t, 360.0);
+    while (mean_anom_deg < 0) mean_anom_deg += 360.0;
+    double mean_anom = DEG_TO_RAD(mean_anom_deg);
+
+    /* Equation of center */
+    double center = sin(mean_anom) * (1.914602 - 0.004817 * t - 0.000014 * t * t)
+                  + sin(2 * mean_anom) * (0.019993 - 0.000101 * t)
+                  + sin(3 * mean_anom) * 0.000289;
+
+    /* Apparent ecliptic longitude */
+    double true_long = mean_long + center;
+    double apparent_long = true_long - 0.00569
+                         - 0.00478 * sin(DEG_TO_RAD(125.04 - 1934.136 * t));
+    double obliq = 23.439 - 0.0000004 * t;  /* Obliquity of the ecliptic */
+
+    /* Solar declination */
+    double declination = RAD_TO_DEG(
+        asin(sin(DEG_TO_RAD(obliq)) * sin(DEG_TO_RAD(apparent_long))));
+
+    /* Elevation at solar noon: hour angle = 0, so cos(HA) = 1 */
+    double sin_elev = sin(DEG_TO_RAD(lat)) * sin(DEG_TO_RAD(declination))
+                    + cos(DEG_TO_RAD(lat)) * cos(DEG_TO_RAD(declination));
+    return RAD_TO_DEG(asin(sin_elev));
+}
+
 @* Daylight Saving Time Calculation.
 @^Timezone@>
 US Daylight Saving Time rules (since 2007):
@@ -624,8 +682,8 @@ the equation of center reaches a maximum of roughly $1.9$ degrees.
 \noindent\label{gloss:hour_angle}{\bf Hour Angle.}\quad
 The angular distance of the Sun westward from the local meridian, measured
 along the celestial equator and expressed in degrees (where $15\deg = 1$~hour).
-The hour angle is zero at solar noon, negative before noon, and positive after
-noon. At sunrise and sunset, the hour angle has equal magnitude and opposite
+The hour angle is zero at solar noon (see Glossary, p.~\pageref{gloss:solar_noon}),
+negative before noon, and positive after noon. At sunrise and sunset, the hour angle has equal magnitude and opposite
 sign. In this program, the hour angle is derived from the solar declination
 (see Glossary, p.~\pageref{gloss:solar_decl}) and the observer's latitude,
 using the zenith angle (see Glossary, p.~\pageref{gloss:zenith}) to account
@@ -715,6 +773,21 @@ longitude is primarily the equation of center
 (see Glossary, p.~\pageref{gloss:eq_of_center}). A further correction for
 aberration (see Glossary, p.~\pageref{gloss:aberration}) yields the apparent
 longitude used in the declination and right ascension calculations.
+
+\medskip
+\noindent\label{gloss:solar_noon}{\bf Solar Noon.}\quad @^Solar Noon@>
+The moment each day when the Sun reaches its highest point in the sky and
+crosses the observer's local meridian, exactly halfway between sunrise and
+sunset in terms of the Sun's position. At solar noon, the hour angle
+(see Glossary, p.~\pageref{gloss:hour_angle}) is zero and the Sun is due
+south (in the Northern Hemisphere). Solar noon does not coincide with
+12:00~local clock time in general, because clock time is fixed to timezone
+boundaries and does not follow the Sun's actual motion; additionally, the
+equation of time---the accumulated effect of Earth's elliptical orbit and
+axial tilt---shifts solar noon by up to about 16~minutes ahead or behind
+mean solar time throughout the year. In this program, solar noon is
+implicitly determined through the equation-of-time and Julian Day
+calculations used by the NOAA algorithm (see Glossary, p.~\pageref{gloss:noaa}).
 
 \medskip
 \noindent\label{gloss:timezone}{\bf Timezone.}\quad
