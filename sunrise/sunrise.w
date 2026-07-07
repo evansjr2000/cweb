@@ -260,8 +260,16 @@ atmospheric refraction, using a zenith of exactly 90$^\circ$).
 
     /* --- Solar Noon Elevation --- */
     {
-        double noon_elev = calculate_solar_noon_elevation(latitude, year, month, day);
-        printf("\n=== Solar Noon Elevation ===\n");
+        SunTime noon_time;
+        double noon_elev = calculate_solar_noon_elevation(latitude, longitude,
+                                                          year, month, day, &noon_time);
+        printf("\n=== Solar Noon ===\n");
+        if (noon_time.valid) {
+            printf("Local time of solar noon: %02d:%07.4f %s\n",
+                   noon_time.hour, noon_time.minute, tz_name);
+        } else {
+            printf("Local time of solar noon: unavailable\n");
+        }
         printf("Solar elevation angle above horizon at solar noon: %.4f\260\n", noon_elev);
     }
 }
@@ -282,7 +290,9 @@ double calculate_total_sunshine(SunTime sunrise, SunTime sunset);
 int is_daylight_saving_time(int year, int month, int day);
 int get_day_of_week(int year, int month, int day);
 double get_timezone_offset(void);
-double calculate_solar_noon_elevation(double lat, int year, int month, int day);
+double calculate_solar_noon_elevation(double lat, double lng,
+                                      int year, int month, int day,
+                                      SunTime *noon_time);
 
 @ The Julian day @^Julian Day@> is a continuous count of days since the beginning of
 the Julian Period. It's used as a standard reference for astronomical
@@ -526,7 +536,8 @@ double calculate_total_sunshine(SunTime sunrise, SunTime sunset) {
     return sunshine_hours;
 }
 
-@ Calculate the solar elevation angle above the horizon at solar noon.
+@ Calculate the solar elevation angle above the horizon at solar noon, and
+report the local clock time at which solar noon occurs.
 @^Solar Noon@>@^Solar Declination@>@^Hour Angle@>
 The {\it elevation angle\/} is the angle between the Sun and the observer's
 horizon, measured upward from the horizon plane ($0\deg$ at the horizon,
@@ -539,10 +550,17 @@ where $\alpha$ is the elevation angle above the horizon, $\phi$ is the observer'
 latitude, and $\delta$ is the solar declination
 (see Glossary, p.~\pageref{gloss:solar_decl}).
 The function recomputes the declination from the Julian day using the same NOAA
-intermediate quantities as |calculate_time_utc|.
+intermediate quantities as |calculate_time_utc|. Because those same quantities
+also yield the equation of time, the moment of solar noon in UTC is
+$$\hbox{noon}_{\rm UTC} = {720 - 4\lambda - E \over 60}\ \hbox{hours},$$
+where $\lambda$ is the longitude and $E$ is the equation of time in minutes.
+The result is converted to local clock time through |utc_to_local_time| and
+returned in |*noon_time|.
 
 @<Function implementations@>=
-double calculate_solar_noon_elevation(double lat, int year, int month, int day) {
+double calculate_solar_noon_elevation(double lat, double lng,
+                                      int year, int month, int day,
+                                      SunTime *noon_time) {
     double jd = calculate_julian_day(year, month, day);
     double t = (jd - 2451545.0) / 36525.0;  /* Julian centuries since J2000.0 */
 
@@ -554,6 +572,9 @@ double calculate_solar_noon_elevation(double lat, int year, int month, int day) 
     double mean_anom_deg = fmod(357.52911 + 35999.05029 * t - 0.0001537 * t * t, 360.0);
     while (mean_anom_deg < 0) mean_anom_deg += 360.0;
     double mean_anom = DEG_TO_RAD(mean_anom_deg);
+
+    /* Orbital eccentricity (needed for the equation of time) */
+    double eccent = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
 
     /* Equation of center */
     double center = sin(mean_anom) * (1.914602 - 0.004817 * t - 0.000014 * t * t)
@@ -569,6 +590,22 @@ double calculate_solar_noon_elevation(double lat, int year, int month, int day) 
     /* Solar declination */
     double declination = RAD_TO_DEG(
         asin(sin(DEG_TO_RAD(obliq)) * sin(DEG_TO_RAD(apparent_long))));
+
+    /* Equation of time (minutes), from the same NOAA quantities */
+    double var_y = tan(DEG_TO_RAD(obliq / 2.0));
+    var_y = var_y * var_y;
+    double eq_time = 4.0 * RAD_TO_DEG(
+        var_y * sin(2.0 * DEG_TO_RAD(mean_long))
+        - 2.0 * eccent * sin(mean_anom)
+        + 4.0 * eccent * var_y * sin(mean_anom) * cos(2.0 * DEG_TO_RAD(mean_long))
+        - 0.5 * var_y * var_y * sin(4.0 * DEG_TO_RAD(mean_long))
+        - 1.25 * eccent * eccent * sin(2.0 * mean_anom));
+
+    /* Solar noon in decimal hours from midnight UTC, converted to local time */
+    double solar_noon_utc = (720.0 - 4.0 * lng - eq_time) / 60.0;
+    while (solar_noon_utc < 0) solar_noon_utc += 24.0;
+    while (solar_noon_utc >= 24.0) solar_noon_utc -= 24.0;
+    utc_to_local_time(solar_noon_utc, noon_time);
 
     /* Elevation at solar noon: hour angle = 0, so cos(HA) = 1 */
     double sin_elev = sin(DEG_TO_RAD(lat)) * sin(DEG_TO_RAD(declination))
