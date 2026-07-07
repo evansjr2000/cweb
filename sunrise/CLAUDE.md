@@ -24,6 +24,9 @@ make code   # Run ctangle to extract sunrise.c from sunrise.w
 make exe    # Compile sunrise.c → sunrise executable (uses local cc)
 make doc    # Run cweave + pdftex twice to produce sunrise.pdf
 
+# Install the executable into /usr/local/bin (root-owned, so use sudo)
+sudo make install   # Override location with: make install PREFIX=/some/dir
+
 # Clean generated files (keeps PDF)
 make clean
 

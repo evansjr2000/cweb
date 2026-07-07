@@ -5,6 +5,8 @@
 #   code     - Extract C code from CWEB source
 #   doc      - Generate PDF documentation
 #   exe      - Compile the executable
+#   install  - Install the executable into /usr/local/bin
+#   commit   - Commit the CWEB source (sunrise.w) to git
 #   clean    - Remove generated files
 #   cleanall - Remove all generated files including PDF
 
@@ -23,7 +25,14 @@ DOCKER_RUN = docker run --rm -v "$(PWD):/work" $(IMAGE_NAME)
 CC = cc
 CFLAGS = -O2 -Wall
 
-.PHONY: all code doc exe clean cleanall
+# Installation directory
+PREFIX = /usr/local
+BINDIR = $(PREFIX)/bin
+
+# Commit message for `make commit` (override with: make commit MSG="...")
+MSG = Update sunrise.w
+
+.PHONY: all code doc exe install commit clean cleanall
 
 all: code exe doc
 
@@ -48,6 +57,16 @@ exe: $(EXE)
 
 $(EXE): $(C_SRC)
 	$(CC) $(CFLAGS) -o $(EXE) $(C_SRC) -lm
+
+# Install the executable into $(BINDIR) (default /usr/local/bin)
+install: $(EXE)
+	mkdir -p $(BINDIR)
+	install -m 755 $(EXE) $(BINDIR)/$(EXE)
+
+# Commit the CWEB source to git (single source of truth)
+commit:
+	git add $(CWEB_SRC)
+	git commit -m "$(MSG)"
 
 clean:
 	rm -f $(C_SRC) $(TEX_SRC) $(EXE)
